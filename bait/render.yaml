@@ -4,6 +4,7 @@ databases:
 services:
   - type: web
     name: bait-app
+    rootDir: bait
     runtime: node
     plan: free
     buildCommand: npm install
