@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#2f7d5b">
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>أغراض البيت</title>
+<style>
+:root{--bg:#faf6ef;--card:#fff;--tx:#2b2620;--mu:#8a7f70;--ac:#2f7d5b;--rd:#c0392b;--rd2:#fdeceb;--bd:#e7dfd1;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root{--bg:#1b1916;--card:#26231f;--tx:#f1ebe0;--mu:#a09684;--ac:#5cc596;--rd:#ff7b6b;--rd2:#3d2421;--bd:#38332c}}
+body{margin:0;background:var(--bg);color:var(--tx);font-family:Tahoma,"Segoe UI",Arial,sans-serif;font-size:18px}
+.w{max-width:560px;margin:0 auto;padding:16px}
+h1{font-size:26px;margin:8px 0 2px}
+.box{background:var(--card);border:1px solid var(--bd);border-radius:16px;padding:14px;margin-bottom:14px}
+input[type=text],input[type=password]{width:100%;box-sizing:border-box;font:inherit;font-size:20px;padding:14px;border:2px solid var(--bd);border-radius:12px;background:var(--bg);color:var(--tx);margin-bottom:8px}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
+.chip{font:inherit;font-size:16px;padding:8px 14px;border-radius:99px;border:1px solid var(--bd);background:var(--bg);color:var(--tx)}
+.btn{font:inherit;font-size:20px;font-weight:bold;width:100%;padding:14px;border:0;border-radius:12px;background:var(--ac);color:#fff;margin-top:6px}
+.row{display:flex;align-items:center;gap:8px;font-size:16px;color:var(--mu);margin:8px 0}
+.item{display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:12px;margin-bottom:8px}
+.item.u{border-color:var(--rd);background:var(--rd2)}
+.item .t{flex:1;font-size:20px}
+.m{display:block;font-size:13px;color:var(--mu)}
+.ok{font:inherit;font-size:15px;padding:10px 12px;border:0;border-radius:10px;background:var(--ac);color:#fff}
+.x{font:inherit;border:0;background:none;color:var(--mu);font-size:22px}
+.done .t{text-decoration:line-through;color:var(--mu)}
+h2{font-size:18px;margin:18px 0 8px}
+.empty{color:var(--mu);text-align:center;padding:20px}
+.me{font-size:14px;color:var(--mu)} .me button,.lnk{font:inherit;border:0;background:none;color:var(--ac);text-decoration:underline}
+.toast{position:fixed;left:12px;right:12px;top:calc(env(safe-area-inset-top,0px) + 10px);background:var(--ac);color:#fff;padding:14px;border-radius:14px;z-index:9;display:none;text-align:center}
+.note{background:var(--card);border:1px dashed var(--bd);border-radius:12px;padding:10px;font-size:14px;color:var(--mu);margin-bottom:12px;display:none}
+.err{color:var(--rd);font-size:15px;min-height:20px}
+</style>
+</head>
+<body>
+<div class="toast" id="toast"></div>
+<div class="w">
+<h1>🏠 أغراض البيت</h1>
+<p class="me" id="me"></p>
+
+<div id="login" class="box" style="display:none">
+  <input type="password" id="pw" placeholder="كلمة سر العيلة">
+  <p style="margin:6px 0">مين أنت؟</p>
+  <div class="chips"><button class="chip" data-n="ماما">ماما</button></div>
+  <input type="text" id="nm" placeholder="أو اكتب اسمك (مثلاً: أحمد)">
+  <div class="err" id="err"></div>
+  <button class="btn" id="go">دخول</button>
+</div>
+
+<div id="app" style="display:none">
+  <div class="note" id="ios">📱 على الآيفون: اضغط زر المشاركة ثم "إضافة إلى الشاشة الرئيسية"، وافتح التطبيق من هناك لتوصلك الإشعارات.</div>
+  <div class="note" id="pnote"><button class="lnk" id="pbtn">فعّل الإشعارات 🔔</button></div>
+  <div class="box">
+    <input type="text" id="txt" placeholder="شو لازمك؟ مثلاً: خبز">
+    <div class="chips" id="quick"></div>
+    <label class="row"><input type="checkbox" id="urg"> مستعجل ⚡</label>
+    <button class="btn" id="add">أرسل للأولاد 📨</button>
+  </div>
+  <h2>🛒 لازم تنجاب للبيت <span id="cnt"></span></h2>
+  <div id="pend"></div>
+  <h2>✅ انجابت</h2>
+  <div id="done"></div>
+</div>
+</div>
+<script>
+(function(){
+var $=function(i){return document.getElementById(i)};
+var S=function(k,v){try{if(v===undefined)return localStorage.getItem(k)||"";localStorage.setItem(k,v)}catch(e){return ""}};
+var me=S("name"),pass=S("pass"),items=[],timer=null;
+var QUICK=["خبز","حليب","بيض","دوا","خضرة","فواكه","غاز","مي"];
+function esc(s){var d=document.createElement("div");d.textContent=s;return d.innerHTML}
+function toast(m){var t=$("toast");t.textContent=m;t.style.display="block";clearTimeout(toast.h);toast.h=setTimeout(function(){t.style.display="none"},4000)}
+function api(path,opt){
+  opt=opt||{};opt.headers=Object.assign({"Content-Type":"application/json","x-pass":pass},opt.headers||{});
+  return fetch(path,opt).then(function(r){if(r.status===401){logout();throw 0}return r.json()});
+}
+function logout(){S("pass","");pass="";$("login").style.display="block";$("app").style.display="none";clearInterval(timer)}
+
+document.querySelectorAll("[data-n]").forEach(function(b){b.onclick=function(){$("nm").value=b.dataset.n}});
+$("go").onclick=function(){
+  var n=$("nm").value.trim(),p=$("pw").value;
+  if(!n){$("err").textContent="اكتب اسمك";return}
+  fetch("/api/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({password:p})})
+  .then(function(r){if(!r.ok){$("err").textContent="كلمة السر غلط";return}
+    me=n;pass=p;S("name",n);S("pass",p);$("err").textContent="";start()});
+};
+
+QUICK.forEach(function(q){var b=document.createElement("button");b.className="chip";b.textContent=q;b.onclick=function(){$("txt").value=q};$("quick").appendChild(b)});
+
+function fmt(ts){try{return new Date(ts).toLocaleString("ar",{weekday:"short",hour:"numeric",minute:"2-digit"})}catch(e){return ""}}
+function render(){
+  var p=items.filter(function(i){return !i.done}),d=items.filter(function(i){return i.done}).slice(0,15);
+  p.sort(function(a,b){return (b.urgent?1:0)-(a.urgent?1:0)});
+  $("cnt").textContent=p.length?"("+p.length+")":"";
+  document.title=(p.length?"("+p.length+") ":"")+"أغراض البيت";
+  $("pend").innerHTML=p.length?p.map(function(i){
+    return "<div class='item"+(i.urgent?" u":"")+"'><div class='t'>"+(i.urgent?"⚡ ":"")+esc(i.text)+"<span class='m'>من "+esc(i.by)+" · "+fmt(i.created_at)+"</span></div><button class='ok' data-ok='"+i.id+"'>جبتها ✓</button><button class='x' data-del='"+i.id+"'>×</button></div>";
+  }).join(""):"<div class='empty'>ما في شي مطلوب 🎉</div>";
+  $("done").innerHTML=d.length?d.map(function(i){
+    return "<div class='item done'><div class='t'>"+esc(i.text)+"<span class='m'>جابها "+esc(i.done_by||"")+"</span></div><button class='x' data-del='"+i.id+"'>×</button></div>";
+  }).join(""):"<div class='empty'>—</div>";
+}
+function load(){api("/api/items").then(function(r){items=r;render()}).catch(function(){})}
+document.addEventListener("click",function(e){
+  var t=e.target;
+  if(t.dataset&&t.dataset.ok)api("/api/items/"+t.dataset.ok+"/done",{method:"POST",body:JSON.stringify({by:me})}).then(load);
+  if(t.dataset&&t.dataset.del&&confirm("حذف؟"))api("/api/items/"+t.dataset.del,{method:"DELETE"}).then(load);
+});
+$("add").onclick=function(){
+  var v=$("txt").value.trim();if(!v)return;
+  api("/api/items",{method:"POST",body:JSON.stringify({text:v,by:me,urgent:$("urg").checked})}).then(function(){
+    $("txt").value="";$("urg").checked=false;toast("انرسلت للأولاد ✓");load()});
+};
+$("txt").addEventListener("keydown",function(e){if(e.key==="Enter")$("add").click()});
+
+function b64(s){var p="=".repeat((4-s.length%4)%4),b=(s+p).replace(/-/g,"+").replace(/_/g,"/"),r=atob(b),o=new Uint8Array(r.length);for(var i=0;i<r.length;i++)o[i]=r.charCodeAt(i);return o}
+function enablePush(){
+  if(!("serviceWorker" in navigator)||!("PushManager" in window))return Promise.resolve(false);
+  return Notification.requestPermission().then(function(p){
+    if(p!=="granted")return false;
+    return navigator.serviceWorker.ready.then(function(reg){
+      return api("/api/vapid").then(function(v){
+        return reg.pushManager.getSubscription().then(function(s){return s||reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64(v.key)})});
+      }).then(function(sub){return api("/api/subscribe",{method:"POST",body:JSON.stringify({sub:sub,name:me})})}).then(function(){return true});
+    });
+  }).catch(function(){return false});
+}
+$("pbtn").onclick=function(){enablePush().then(function(ok){$("pnote").style.display=ok?"none":"block";toast(ok?"تفعلت الإشعارات 🔔":"ما انفعلت. تأكد من إذن الإشعارات")})};
+
+function start(){
+  $("login").style.display="none";$("app").style.display="block";
+  $("me").innerHTML="أهلاً "+esc(me)+" · <button id='sw'>تسجيل خروج</button>";
+  $("sw").onclick=function(){S("name","");logout();$("me").textContent=""};
+  var ios=/iphone|ipad/i.test(navigator.userAgent),standalone=window.navigator.standalone||matchMedia("(display-mode: standalone)").matches;
+  if(ios&&!standalone)$("ios").style.display="block";
+  if("Notification" in window){
+    if(Notification.permission==="granted")enablePush();
+    else if(Notification.permission==="default"&&(!ios||standalone))$("pnote").style.display="block";
+  }
+  load();clearInterval(timer);timer=setInterval(load,15000);
+}
+if("serviceWorker" in navigator)navigator.serviceWorker.register("/sw.js");
+document.addEventListener("visibilitychange",function(){if(!document.hidden&&pass)load()});
+if(me&&pass)start();else{$("login").style.display="block";if(me)$("nm").value=me}
+})();
+</script>
+</body>
+</html>
