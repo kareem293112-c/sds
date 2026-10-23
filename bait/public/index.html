@@ -71,6 +71,8 @@ h2{font-size:1em;margin:18px 0 8px}
     <div class="chips" id="cats"></div>
     <input type="text" id="note" placeholder="ملاحظة (اختياري): الماركة، المحل...">
     <label class="row"><input type="checkbox" id="urg"> مستعجل ⚡</label>
+    <div id="draft"></div>
+    <button class="btn" id="more" style="background:var(--bd);color:var(--tx)">➕ زيد غرض ثاني</button>
     <button class="btn" id="add">أرسل للأولاد 📨</button>
   </div>
   <div class="chips" id="flt"></div>
@@ -106,7 +108,7 @@ $("go").onclick=function(){
   .then(function(r){if(!r.ok){$("err").textContent="كلمة السر غلط";return}
     me=n;pass=p;S("name",n);S("pass",p);$("err").textContent="";start()});
 };
-QUICK.forEach(function(q){var b=document.createElement("button");b.className="chip";b.textContent=q[0];b.onclick=function(){$("txt").value=q[0];cat=q[1];drawCats()};$("quick").appendChild(b)});
+QUICK.forEach(function(q){var b=document.createElement("button");b.className="chip";b.textContent=q[0];b.onclick=function(){draft.push({text:q[0],cat:q[1],qty:$("qty").value.trim(),note:"",urgent:$("urg").checked});$("qty").value="";drawDraft()};$("quick").appendChild(b)});
 
 function fmt(ts){try{return new Date(ts).toLocaleString("ar",{weekday:"short",hour:"numeric",minute:"2-digit"})}catch(e){return ""}}
 function render(){
@@ -132,12 +134,23 @@ document.addEventListener("click",function(e){
   if(t.dataset.claim)post("/api/items/"+t.dataset.claim+"/claim").then(load);
   if(t.dataset.del&&confirm("حذف؟"))api("/api/items/"+t.dataset.del,{method:"DELETE"}).then(load);
 });
-$("add").onclick=function(){
+var draft=[];
+function drawDraft(){
+  $("draft").innerHTML=draft.map(function(d,k){return "<span class='cl' style='margin:0 0 6px 6px'>"+(ICO[d.cat]||"")+" "+esc(d.text)+(d.qty?" · "+esc(d.qty):"")+(d.urgent?" ⚡":"")+" <button class='x' data-dr='"+k+"' style='font-size:1em'>×</button></span>"}).join("");
+  $("add").textContent="أرسل للأولاد 📨"+(draft.length?" ("+draft.length+")":"");
+}
+function cur(){
   var v=$("txt").value.trim();if(!v)return;
-  post("/api/items",{text:v,qty:$("qty").value,note:$("note").value,cat:cat,urgent:$("urg").checked}).then(function(){
-    $("txt").value="";$("qty").value="";$("note").value="";$("urg").checked=false;toast("انرسلت للأولاد ✓");load()});
+  draft.push({text:v,qty:$("qty").value.trim(),note:$("note").value.trim(),cat:cat,urgent:$("urg").checked});
+  $("txt").value="";$("qty").value="";$("note").value="";$("urg").checked=false;
+}
+document.addEventListener("click",function(e){var k=e.target.dataset&&e.target.dataset.dr;if(k!=null&&k!==""){draft.splice(+k,1);drawDraft()}});
+$("more").onclick=function(){cur();drawDraft();$("txt").focus()};
+$("add").onclick=function(){
+  cur();if(!draft.length)return;
+  post("/api/items/bulk",{items:draft}).then(function(){draft=[];drawDraft();toast("انرسلت للأولاد ✓");load()});
 };
-$("txt").addEventListener("keydown",function(e){if(e.key==="Enter")$("add").click()});
+$("txt").addEventListener("keydown",function(e){if(e.key==="Enter")$("more").click()});
 $("sos").onclick=function(){if(confirm("نبعت للأولاد إنك بدك اتصال؟"))post("/api/sos").then(function(){toast("انرسلت، رح يتصلوا فيك 📞")})};
 
 function b64(s){var p="=".repeat((4-s.length%4)%4),b=(s+p).replace(/-/g,"+").replace(/_/g,"/"),r=atob(b),o=new Uint8Array(r.length);for(var i=0;i<r.length;i++)o[i]=r.charCodeAt(i);return o}
