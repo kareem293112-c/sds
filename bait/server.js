@@ -72,6 +72,23 @@ app.post("/api/items", auth, async (req, res) => {
   pushTo(by, { title: urgent ? "⚡ مستعجل" : "🏠 أغراض البيت", body: `${by} بدها: ${text}${qty ? " (" + qty + ")" : ""}` });
 });
 
+app.post("/api/items/bulk", auth, async (req, res) => {
+  const by = String(req.body.by || "").trim().slice(0, 40);
+  const list = (Array.isArray(req.body.items) ? req.body.items : []).slice(0, 30)
+    .map((i) => ({
+      text: String(i.text || "").trim().slice(0, 200), qty: String(i.qty || "").trim().slice(0, 40),
+      cat: String(i.cat || "").trim().slice(0, 30), note: String(i.note || "").trim().slice(0, 200), urgent: !!i.urgent,
+    })).filter((i) => i.text);
+  if (!by || !list.length) return res.status(400).json({ error: "bad" });
+  for (const i of list)
+    await pool.query("INSERT INTO items(text,by,urgent,qty,cat,note) VALUES($1,$2,$3,$4,$5,$6)",
+      [i.text, by, i.urgent, i.qty, i.cat, i.note]);
+  res.json({ ok: true });
+  const names = list.map((i) => i.text + (i.qty ? " (" + i.qty + ")" : "")).join("، ");
+  pushTo(by, { title: list.some((i) => i.urgent) ? "⚡ مستعجل" : "🏠 أغراض البيت",
+    body: `${by} بدها ${list.length > 1 ? list.length + " أغراض" : ""}: ${names}`.slice(0, 180) });
+});
+
 app.post("/api/items/:id/done", auth, async (req, res) => {
   const by = String(req.body.by || "").slice(0, 40);
   const { rows } = await pool.query(
