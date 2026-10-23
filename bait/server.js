@@ -45,6 +45,17 @@ async function pushTo(excludeName, payload) {
   }));
 }
 
+const fmtList = (a, f) => a.length > 5 ? a.slice(0, 5).map(f).join("، ") + " +" + (a.length - 5) : a.map(f).join("، ");
+async function notifyNew(by, list, ids) {
+  const p = await pool.query("SELECT text,qty FROM items WHERE done=FALSE AND id<>ALL($1) ORDER BY created_at DESC LIMIT 30", [ids]);
+  const d = await pool.query("SELECT text,done_by FROM items WHERE done=TRUE AND done_at > now() - interval '1 day' ORDER BY done_at DESC LIMIT 30");
+  const q = (i) => i.text + (i.qty ? " (" + i.qty + ")" : "");
+  let body = `${by} بدها: ${fmtList(list, q)}`;
+  body += "\n✅ انجابت: " + (d.rows.length ? fmtList(d.rows, (i) => i.text + (i.done_by ? " (" + i.done_by + ")" : "")) : "لا شي");
+  body += "\n🛒 لسا ما انجابت: " + (p.rows.length ? fmtList(p.rows, q) : "لا شي");
+  pushTo(by, { title: list.some((i) => i.urgent) ? "⚡ مستعجل" : "🏠 أغراض البيت", body });
+}
+
 app.post("/api/login", (req, res) =>
   !PASS || req.body.password === PASS ? res.json({ ok: true }) : res.status(401).json({ error: "bad" }));
 
@@ -67,9 +78,9 @@ app.post("/api/items", auth, async (req, res) => {
   const cat = String(req.body.cat || "").trim().slice(0, 30);
   const note = String(req.body.note || "").trim().slice(0, 200);
   if (!text || !by) return res.status(400).json({ error: "bad" });
-  await pool.query("INSERT INTO items(text,by,urgent,qty,cat,note) VALUES($1,$2,$3,$4,$5,$6)", [text, by, urgent, qty, cat, note]);
+  const r = await pool.query("INSERT INTO items(text,by,urgent,qty,cat,note) VALUES($1,$2,$3,$4,$5,$6) RETURNING id", [text, by, urgent, qty, cat, note]);
   res.json({ ok: true });
-  pushTo(by, { title: urgent ? "⚡ مستعجل" : "🏠 أغراض البيت", body: `${by} بدها: ${text}${qty ? " (" + qty + ")" : ""}` });
+  notifyNew(by, [{ text, qty, urgent }], [r.rows[0].id]);
 });
 
 app.post("/api/items/bulk", auth, async (req, res) => {
@@ -80,13 +91,14 @@ app.post("/api/items/bulk", auth, async (req, res) => {
       cat: String(i.cat || "").trim().slice(0, 30), note: String(i.note || "").trim().slice(0, 200), urgent: !!i.urgent,
     })).filter((i) => i.text);
   if (!by || !list.length) return res.status(400).json({ error: "bad" });
-  for (const i of list)
-    await pool.query("INSERT INTO items(text,by,urgent,qty,cat,note) VALUES($1,$2,$3,$4,$5,$6)",
+  const ids = [];
+  for (const i of list) {
+    const r = await pool.query("INSERT INTO items(text,by,urgent,qty,cat,note) VALUES($1,$2,$3,$4,$5,$6) RETURNING id",
       [i.text, by, i.urgent, i.qty, i.cat, i.note]);
+    ids.push(r.rows[0].id);
+  }
   res.json({ ok: true });
-  const names = list.map((i) => i.text + (i.qty ? " (" + i.qty + ")" : "")).join("، ");
-  pushTo(by, { title: list.some((i) => i.urgent) ? "⚡ مستعجل" : "🏠 أغراض البيت",
-    body: `${by} بدها ${list.length > 1 ? list.length + " أغراض" : ""}: ${names}`.slice(0, 180) });
+  notifyNew(by, list, ids);
 });
 
 app.post("/api/items/:id/done", auth, async (req, res) => {
