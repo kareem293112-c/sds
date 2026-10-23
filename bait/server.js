@@ -19,6 +19,7 @@ async function init() {
     id SERIAL PRIMARY KEY, text TEXT NOT NULL, by TEXT NOT NULL,
     urgent BOOLEAN DEFAULT FALSE, done BOOLEAN DEFAULT FALSE,
     done_by TEXT, created_at TIMESTAMPTZ DEFAULT now(), done_at TIMESTAMPTZ)`);
+  await pool.query(`ALTER TABLE items ADD COLUMN IF NOT EXISTS qty TEXT, ADD COLUMN IF NOT EXISTS cat TEXT, ADD COLUMN IF NOT EXISTS note TEXT, ADD COLUMN IF NOT EXISTS claimed_by TEXT`);
   await pool.query(`CREATE TABLE IF NOT EXISTS subs(
     endpoint TEXT PRIMARY KEY, data JSONB NOT NULL, name TEXT NOT NULL)`);
   await pool.query(`CREATE TABLE IF NOT EXISTS settings(k TEXT PRIMARY KEY, v JSONB NOT NULL)`);
@@ -52,7 +53,7 @@ app.get("/api/vapid", auth, (_, res) => res.json({ key: VAPID_PUBLIC }));
 
 app.get("/api/items", auth, async (_, res) => {
   const { rows } = await pool.query(
-    `SELECT id,text,by,urgent,done,done_by,created_at FROM items
+    `SELECT id,text,by,urgent,done,done_by,created_at,qty,cat,note,claimed_by FROM items
      WHERE done=FALSE OR done_at > now() - interval '3 days'
      ORDER BY created_at DESC LIMIT 200`);
   res.json(rows);
@@ -62,10 +63,13 @@ app.post("/api/items", auth, async (req, res) => {
   const text = String(req.body.text || "").trim().slice(0, 200);
   const by = String(req.body.by || "").trim().slice(0, 40);
   const urgent = !!req.body.urgent;
+  const qty = String(req.body.qty || "").trim().slice(0, 40);
+  const cat = String(req.body.cat || "").trim().slice(0, 30);
+  const note = String(req.body.note || "").trim().slice(0, 200);
   if (!text || !by) return res.status(400).json({ error: "bad" });
-  await pool.query("INSERT INTO items(text,by,urgent) VALUES($1,$2,$3)", [text, by, urgent]);
+  await pool.query("INSERT INTO items(text,by,urgent,qty,cat,note) VALUES($1,$2,$3,$4,$5,$6)", [text, by, urgent, qty, cat, note]);
   res.json({ ok: true });
-  pushTo(by, { title: urgent ? "⚡ مستعجل" : "🏠 أغراض البيت", body: `${by} بدها: ${text}` });
+  pushTo(by, { title: urgent ? "⚡ مستعجل" : "🏠 أغراض البيت", body: `${by} بدها: ${text}${qty ? " (" + qty + ")" : ""}` });
 });
 
 app.post("/api/items/:id/done", auth, async (req, res) => {
@@ -75,6 +79,22 @@ app.post("/api/items/:id/done", auth, async (req, res) => {
     [by, req.params.id]);
   res.json({ ok: true });
   if (rows.length) pushTo(by, { title: "✅ انجابت", body: `${by} جاب: ${rows[0].text}` });
+});
+
+app.post("/api/items/:id/claim", auth, async (req, res) => {
+  const by = String(req.body.by || "").slice(0, 40);
+  const { rows } = await pool.query(
+    "UPDATE items SET claimed_by = CASE WHEN claimed_by=$1 THEN NULL ELSE $1 END WHERE id=$2 AND done=FALSE RETURNING text,claimed_by",
+    [by, req.params.id]);
+  res.json({ ok: true });
+  if (rows.length && rows[0].claimed_by)
+    pushTo(by, { title: "🚶 رايح", body: `${by} رايح يجيب: ${rows[0].text}` });
+});
+
+app.post("/api/sos", auth, async (req, res) => {
+  const by = String(req.body.by || "").slice(0, 40);
+  res.json({ ok: true });
+  pushTo(by, { title: "📞 اتصال", body: `${by} بدها حدا يتصل فيها` });
 });
 
 app.delete("/api/items/:id", auth, async (req, res) => {
